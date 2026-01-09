@@ -30,8 +30,9 @@ const AdminLoader: React.FC = () => {
       setDots(prev => prev.length >= 3 ? '' : prev + '.');
     }, 500);
 
-    // 3. Set up the CMS configuration manually
-    const config = `
+    // 3. CMS Initialization Logic
+    const initCMS = () => {
+        const config = `
 backend:
   name: git-gateway
   branch: main
@@ -60,40 +61,49 @@ collections:
       - {label: "Role", name: "role", widget: "string"}
       - {label: "Quote", name: "quote", widget: "text"}
 `;
-
-    // 4. Inject CMS script
-    const script = document.createElement('script');
-    script.src = 'https://unpkg.com/netlify-cms@^2.0.0/dist/netlify-cms.js';
-    script.async = true;
-    
-    // 5. Handle Script Load
-    script.onload = () => {
-        console.log('Netlify CMS loaded');
+        console.log('Initializing CMS...');
         // @ts-ignore
-        if (window.CMS) {
-            // @ts-ignore
-            window.CMS.init({ config: jsyaml.load(config) });
-            
-            // Optional: Inject dark mode styles into CMS preview pane if we could
-            // Note: Actual CMS UI is controlled by Netlify CMS, but we make the entrance cool.
+        if (window.CMS && window.jsyaml) {
+             // @ts-ignore
+             window.CMS.init({ config: window.jsyaml.load(config) });
+        } else {
+            console.error("CMS or js-yaml not found");
         }
     };
 
-    // Simulate HTML structure Netlify CMS expects
-    document.title = 'ROOT ACCESS // ADMIN';
-    
-    // Add CDN for YAML parser
-    const yamlScript = document.createElement('script');
-    yamlScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js';
-    yamlScript.onload = () => {
-        document.head.appendChild(script);
+    // 4. Inject Scripts Sequentially
+    const loadScripts = async () => {
+        // Load YAML parser first
+        if (!window.hasOwnProperty('jsyaml')) {
+            await new Promise<void>((resolve) => {
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js';
+                script.onload = () => resolve();
+                document.head.appendChild(script);
+            });
+        }
+
+        // Load Netlify CMS
+        // @ts-ignore
+        if (!window.CMS) {
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/netlify-cms@^2.0.0/dist/netlify-cms.js';
+            script.onload = () => {
+                initCMS();
+            };
+            document.head.appendChild(script);
+        } else {
+            initCMS();
+        }
     };
-    document.head.appendChild(yamlScript);
+
+    // Simulate HTML structure Netlify CMS expects by modifying document
+    document.title = 'ROOT ACCESS // ADMIN';
+    loadScripts();
 
     // Cleanup
     return () => {
       clearInterval(interval);
-      // We don't remove scripts as CMS needs them if we stay on page
     };
   }, []);
 
